@@ -70,7 +70,17 @@
 
 ### User-flow диаграммы
 
-Описание переходов между части ПС для всех ролей из диаграммы ВИ (название ролей должны совпадать с тем, что указано на c4-модели и диаграмме вариантов использования)
+User flow для клиента
+![User flow для клиента](https://github.com/user-attachments/assets/8de5f556-e9b7-42c7-8bc7-6722c4a16011)
+
+
+User flow для ЖЭК
+![User flow для ЖЭК](https://github.com/user-attachments/assets/80a2fc27-0a14-4906-a462-b7c639bc2a09)
+
+
+User flow для БТИ
+![User flow для БТИ](https://github.com/user-attachments/assets/80a7cf21-bab3-42f8-ace2-eedc19610e9d)
+
 
 
 ---
