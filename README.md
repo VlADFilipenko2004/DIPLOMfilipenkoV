@@ -58,7 +58,228 @@
 
 ### Схема данных
 
-Описание отношений и структур данных, используемых в ПС. Также представить скрипт (программный код), который необходим для генерации БД
+![photo_2025-10-04_16-15-54](https://github.com/user-attachments/assets/20c7a5ba-2ad8-4d98-aa19-2da7b4b1ae07)
+
+Скрипт генерации БД:
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'operation_type_enum') THEN
+        CREATE TYPE operation_type_enum AS ENUM (
+            'REDEVELOPMENT',    -- перепланировка
+            'CONVERSION',       -- перевод (жилое <-> нежилое)
+            'RECONSTRUCTION'    -- переустройство/реконструкция
+        );
+    END IF;
+END$$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'application_status_enum') THEN
+        CREATE TYPE application_status_enum AS ENUM (
+            'NEW',
+            'IN_REVIEW',
+            'AWAITING_INSPECTION',
+            'INSPECTION_DONE',
+            'APPROVED',
+            'REJECTED',
+            'CLOSED'
+        );
+    END IF;
+END$$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'property_type_enum') THEN
+        CREATE TYPE property_type_enum AS ENUM (
+            'RESIDENTIAL',
+            'NON_RESIDENTIAL'
+        );
+    END IF;
+END$$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'object_type_enum') THEN
+        CREATE TYPE object_type_enum AS ENUM (
+            'APARTMENT',
+            'HOUSE',
+            'OFFICE',
+            'COMMERCIAL',
+            'OTHER'
+        );
+    END IF;
+END$$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'attachment_category_enum') THEN
+        CREATE TYPE attachment_category_enum AS ENUM (
+            'BTI_PASSPORT',
+            'PROJECT',
+            'OWNER_CONSENT',
+            'PHOTO',
+            'OTHER'
+        );
+    END IF;
+END$$;
+
+
+CREATE TABLE IF NOT EXISTS roles (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE
+);
+
+
+CREATE TABLE IF NOT EXISTS users (
+    id BIGSERIAL PRIMARY KEY,
+    passport_identifier VARCHAR(128) UNIQUE,
+    phone_number VARCHAR(30),
+    full_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE,
+    photo_url TEXT,
+    enabled BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE OR REPLACE FUNCTION trg_set_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+   NEW.updated_at := now();
+   RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS users_updated_at_trg ON users;
+CREATE TRIGGER users_updated_at_trg
+BEFORE UPDATE ON users
+FOR EACH ROW
+EXECUTE PROCEDURE trg_set_timestamp();
+
+
+CREATE TABLE IF NOT EXISTS users_roles (
+    user_id BIGINT NOT NULL,
+    role_id BIGINT NOT NULL,
+    PRIMARY KEY (user_id, role_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_roles_user ON users_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_users_roles_role ON users_roles(role_id);
+
+
+CREATE TABLE IF NOT EXISTS properties (
+    id BIGSERIAL PRIMARY KEY,
+    owner_id BIGINT NOT NULL,
+    property_type property_type_enum NOT NULL DEFAULT 'RESIDENTIAL',
+    object_type object_type_enum NOT NULL DEFAULT 'APARTMENT',
+    full_address TEXT NOT NULL,
+    cadastral_number VARCHAR(128),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE RESTRICT
+);
+
+DROP TRIGGER IF EXISTS properties_updated_at_trg ON properties;
+CREATE TRIGGER properties_updated_at_trg
+BEFORE UPDATE ON properties
+FOR EACH ROW
+EXECUTE PROCEDURE trg_set_timestamp();
+
+CREATE INDEX IF NOT EXISTS idx_properties_owner ON properties(owner_id);
+CREATE INDEX IF NOT EXISTS idx_properties_address ON properties USING gin (to_tsvector('russian', full_address));
+
+
+CREATE TABLE IF NOT EXISTS applications (
+    id BIGSERIAL PRIMARY KEY,
+    applicant_id BIGINT NOT NULL,       -- заявитель (user)
+    property_id BIGINT NOT NULL,        -- объект недвижимости
+    operation_type operation_type_enum NOT NULL,
+    status application_status_enum NOT NULL DEFAULT 'NEW',
+    rejection_reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    FOREIGN KEY (applicant_id) REFERENCES users(id) ON DELETE RESTRICT,
+    FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE RESTRICT
+);
+
+DROP TRIGGER IF EXISTS applications_updated_at_trg ON applications;
+CREATE TRIGGER applications_updated_at_trg
+BEFORE UPDATE ON applications
+FOR EACH ROW
+EXECUTE PROCEDURE trg_set_timestamp();
+
+CREATE INDEX IF NOT EXISTS idx_applications_applicant ON applications(applicant_id);
+CREATE INDEX IF NOT EXISTS idx_applications_property ON applications(property_id);
+CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
+
+
+CREATE TABLE IF NOT EXISTS application_history (
+    id BIGSERIAL PRIMARY KEY,
+    application_id BIGINT NOT NULL,
+    status application_status_enum NOT NULL,
+    description TEXT,
+    actor_name VARCHAR(255),
+    event_timestamp TIMESTAMPTZ NOT NULL DEFAULT now(),
+    FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_history_app ON application_history(application_id);
+CREATE INDEX IF NOT EXISTS idx_app_history_time ON application_history(event_timestamp);
+
+
+CREATE TABLE IF NOT EXISTS acts (
+    id BIGSERIAL PRIMARY KEY,
+    application_id BIGINT NOT NULL,
+    inspection_date_1 DATE,
+    inspection_date_2 DATE,
+    conclusion TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_acts_application ON acts(application_id);
+
+
+CREATE TABLE IF NOT EXISTS attachments (
+    id BIGSERIAL PRIMARY KEY,
+    application_id BIGINT NOT NULL,
+    category attachment_category_enum NOT NULL DEFAULT 'OTHER',
+    file_path TEXT NOT NULL,
+    original_file_name VARCHAR(1000),
+    mime_type VARCHAR(255),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    FOREIGN KEY (application_id) REFERENCES applications(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_attachments_application ON attachments(application_id);
+
+
+CREATE TABLE IF NOT EXISTS flyway_schema_history (
+    installed_rank INT PRIMARY KEY,
+    version VARCHAR(50),
+    description VARCHAR(200),
+    type VARCHAR(20),
+    script VARCHAR(1000),
+    checksum INT,
+    installed_by VARCHAR(100),
+    installed_on TIMESTAMPTZ NOT NULL DEFAULT now(),
+    execution_time INT,
+    success BOOLEAN
+);
+
+ALTER TABLE applications
+    ADD CONSTRAINT applications_rejection_reason_check
+    CHECK (
+        (status = 'REJECTED' AND rejection_reason IS NOT NULL)
+        OR (status <> 'REJECTED')
+    );
+
+CREATE INDEX IF NOT EXISTS idx_applications_created_at ON applications(created_at);
+
+INSERT INTO roles (name)
+SELECT v
+FROM (VALUES ('CLIENT'), ('ZHEK'), ('BTI'), ('ADMIN')) AS t(v)
+ON CONFLICT (name) DO NOTHING;
+
+
+
 
 ---
 
