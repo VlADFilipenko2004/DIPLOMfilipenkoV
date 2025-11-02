@@ -388,7 +388,179 @@ User flow для БТИ
 
 ### Безопасность
 
-Описать подходы, использованные для обеспечения безопасности, включая описание процессов аутентификации и авторизации с примерами кода из репозитория сервера
+При разработке системы аутентификации и авторизации одной из ключевых задач является создание надёжного и гибкого механизма управления доступом, который эффективно защищает чувствительные данные и функции. Специфика предметной области требует, чтобы система могла быстро и точно идентифицировать пользователей, проверяя их полномочия и обеспечивая доступ только к разрешённым ресурсам.
+Проектирование системы управления доступом требует не только тщательной проверки идентификационных данных, но и учёта множества технических и функциональных требований. Система должна поддерживать высокую скорость обработки запросов, обеспечивать масштабируемость и безопасность данных, а также поддерживать различные методы аутентификации и уровни доступа.
+Для реализации механизма авторизации и аутентификации были использованы Spring Security, входящий в состав Spring Framework, и JWT (JSON Web Token).
+
+@Configuration
+@EnableWebSecurity
+@RequiredArgsConstructor
+public class SecurityConfig {
+    private final JwtAuthenticationFilter jwtAuthFilter;
+    private final AuthenticationProvider authenticationProvider;
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf().disable()
+            .authorizeHttpRequests()
+            .requestMatchers("/api/auth/**").permitAll()
+            .anyRequest().authenticated()
+            .and()
+            .sessionManagement()
+            .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            .and()
+            .authenticationProvider(authenticationProvider)
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+        return http.build();
+    }
+}
+
+В данном коде производится базовая настройка Spring Security. Отключается CSRF-защита, так как используется stateless-аутентификация. Все запросы к /api/auth/** доступны без авторизации (регистрация, логин). Остальные запросы требуют JWT-токен. Устанавливается политика STATELESS, чтобы сервер не хранил сессии. Добавляется фильтр jwtAuthFilter для проверки токена в каждом запросе.
+
+@Component
+@RequiredArgsConstructor
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private final JwtService jwtService;
+    private final UserDetailsService userDetailsService;
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain)
+                                    throws ServletException, IOException {
+
+        final String authHeader = request.getHeader("Authorization");
+        final String jwt;
+        final String userEmail;
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        jwt = authHeader.substring(7);
+        userEmail = jwtService.extractUsername(jwt);
+
+        if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
+            if (jwtService.isTokenValid(jwt, userDetails)) {
+                UsernamePasswordAuthenticationToken authToken =
+                        new UsernamePasswordAuthenticationToken(
+                                userDetails,
+                                null,
+                                userDetails.getAuthorities()
+                        );
+                SecurityContextHolder.getContext().setAuthentication(authToken);
+            }
+        }
+        filterChain.doFilter(request, response);
+    }
+}
+
+Этот фильтр обрабатывает каждый входящий HTTP-запрос. Извлекает JWT из заголовка Authorization. Проверяет токен с помощью JwtService.
+Если токен корректный – устанавливает контекст безопасности, предоставляя пользователю доступ к защищённым ресурсам.
+
+@Service
+public class JwtService {
+
+    private static final String SECRET_KEY = "mySecretKeyExample123456";
+
+    public String extractUsername(String token) {
+        return extractClaim(token, Claims::getSubject);
+    }
+
+    public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
+        final Claims claims = extractAllClaims(token);
+        return claimsResolver.apply(claims);
+    }
+
+    public String generateToken(UserDetails userDetails) {
+        return Jwts.builder()
+                .setSubject(userDetails.getUsername())
+                .setIssuedAt(new Date(System.currentTimeMillis()))
+                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 24))
+                .signWith(getSignInKey(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public boolean isTokenValid(String token, UserDetails userDetails) {
+        final String username = extractUsername(token);
+        return (username.equals(userDetails.getUsername())) && !isTokenExpired(token);
+    }
+
+    private boolean isTokenExpired(String token) {
+        return extractExpiration(token).before(new Date());
+    }
+
+    private Date extractExpiration(String token) {
+        return extractClaim(token, Claims::getExpiration);
+    }
+
+    private Claims extractAllClaims(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(getSignInKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+    }
+
+    private Key getSignInKey() {
+        byte[] keyBytes = Decoders.BASE64.decode(SECRET_KEY);
+        return Keys.hmacShaKeyFor(keyBytes);
+    }
+}
+
+JwtService отвечает за:
+– генерацию токена при успешной аутентификации,
+– валидацию токена,
+– извлечение информации о пользователе (subject) и сроке действия.
+Токен подписывается алгоритмом HS256 и содержит дату истечения срока действия.
+
+@Service
+@RequiredArgsConstructor
+public class AuthenticationService {
+
+    private final UserRepository repository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
+    private final AuthenticationManager authenticationManager;
+
+    public AuthenticationResponse register(RegisterRequest request) {
+        var user = User.builder()
+                .username(request.getUsername())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .role(Role.USER)
+                .build();
+
+        repository.save(user);
+        var jwtToken = jwtService.generateToken(user);
+        return AuthenticationResponse.builder()
+                .token(jwtToken)
+                .build();
+    }
+}
+
+Здесь используется BCryptPasswordEncoder для безопасного хеширования паролей. Каждый пароль кодируется с использованием случайной «соли», что делает невозможным обратное восстановление или подбор хеша. После регистрации пользователь получает JWT для дальнейшего доступа.
+
+@Configuration
+public class PasswordConfig {
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+}
+Компонент BCryptPasswordEncoder реализует алгоритм BCrypt. Он автоматически генерирует соль и позволяет регулировать уровень сложности хеширования через параметр «cost factor», обеспечивая высокий уровень защиты паролей.
+В архитектуру программной системы добавлен слой безопасности (Security Layer), включающий:
+– фильтр JwtAuthenticationFilter;
+– сервис JwtService;
+– менеджер аутентификации;
+– хранилище пользователей и ролей.
+Теперь взаимодействие между клиентом и сервером осуществляется через JWT, который клиент передаёт в каждом запросе. Сервер проверяет подпись токена и срок его действия, после чего предоставляет доступ к нужным ресурсам. Все данные передаются по защищённому протоколу HTTPS.
+Реализованная система аутентификации и авторизации обеспечивает надёжный и гибкий механизм управления доступом.
+Использование Spring Security и JWT позволяет достичь высокой степени защиты, а применение BCrypt обеспечивает безопасность хранения паролей.
+Такая архитектура полностью удовлетворяет требованиям безопасности, масштабируемости и интеграции с внешними системами аутентификации.
 
 ### Оценка качества кода
 
