@@ -380,7 +380,25 @@ User flow для БТИ
 
 ### UML-диаграммы
 
-Представить все UML-диаграммы , которые позволят более точно понять структуру и детали реализации ПС
+ <img width="983" height="430" alt="image" src="https://github.com/user-attachments/assets/d282838d-5912-4042-bc0b-a69c6d7c534f" />
+
+Рисунок 1.1 – Диаграмма деятельности процесса смены статуса заявления «Клиент – Сотрудник ЖЭК»
+
+ <img width="942" height="885" alt="image" src="https://github.com/user-attachments/assets/ea99f5be-9724-4fce-8829-929106df3d83" />
+
+Рисунок 1.2 – Диаграмма состояний объекта Статус клиента
+
+ <img width="979" height="818" alt="image" src="https://github.com/user-attachments/assets/efdcada1-bcdc-48ab-95fb-205fd58383e9" />
+
+Рисунок 1.3 – Диаграмма последовательности процесса изменения статуса «Клиент – Сотрудник ЖЭК»
+
+ <img width="713" height="738" alt="image" src="https://github.com/user-attachments/assets/81456f31-6530-4bca-b141-67c7f3114998" />
+
+Рисунок 1.4 – Диаграмма классов программного средства
+
+ <img width="614" height="414" alt="image" src="https://github.com/user-attachments/assets/99df4979-e968-4b11-8bca-ad5411835e41" />
+
+Рисунок 1.5 – Диаграмма развертывания системы
 
 ### Спецификация API
 
