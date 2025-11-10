@@ -392,7 +392,7 @@ User flow для БТИ
 
 Рисунок 1.3 – Диаграмма последовательности процесса изменения статуса «Клиент – Сотрудник ЖЭК»
 
- <img width="713" height="738" alt="image" src="https://github.com/user-attachments/assets/81456f31-6530-4bca-b141-67c7f3114998" />
+![Диаграмма классов](https://github.com/user-attachments/assets/432b610f-2a63-4f32-b951-26b5a2ac7f7c)
 
 Рисунок 1.4 – Диаграмма классов программного средства
 
