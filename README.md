@@ -388,7 +388,7 @@ User flow для БТИ
 
 Рисунок 1.2 – Диаграмма состояний объекта Статус клиента
 
- <img width="979" height="818" alt="image" src="https://github.com/user-attachments/assets/efdcada1-bcdc-48ab-95fb-205fd58383e9" />
+<img width="1556" height="1162" alt="Диаграмма последовательности процесса изменения статуса заявления (Клиент - Сотрудник ЖЭК) Варик 2" src="https://github.com/user-attachments/assets/49960cd9-71e2-4d28-b275-8fef1647ae3f" />
 
 Рисунок 1.3 – Диаграмма последовательности процесса изменения статуса «Клиент – Сотрудник ЖЭК»
 
