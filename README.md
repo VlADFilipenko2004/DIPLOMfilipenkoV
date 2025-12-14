@@ -1141,11 +1141,80 @@ Security	Vulnerabilities	JWT + stateless, минимальные
 
 ### Unit-тесты
 
-Представить код тестов для пяти методов и его пояснение
+@Test
+void testGetMyProperties_ShouldReturnOk() throws Exception {
+
+    mockMvc.perform(get("/properties")
+            .header("Authorization", "Bearer test-token"))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON));
+}
 
 ### Интеграционные тесты
 
-Представить код тестов и его пояснение
+@SpringBootTest
+@AutoConfigureMockMvc
+class ApplicationControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockBean
+    private ApplicationService applicationService;
+
+    @Test
+    void getCurrentUserApplications_ShouldReturnOk() throws Exception {
+
+        when(applicationService.getApplicationsForCurrentUser(
+                anyString(), any()))
+                .thenReturn(List.of());
+
+        mockMvc.perform(get("/applications")
+                .header("Authorization", "Bearer test-token"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON));
+    }
+}
+
+
+@Test
+void createApplication_ShouldReturnOk() throws Exception {
+
+    MockMultipartFile application =
+            new MockMultipartFile(
+                    "application",
+                    "",
+                    "application/json",
+                    "{\"propertyId\":1,\"operationType\":\"REPLANNING\"}"
+                            .getBytes()
+            );
+
+    when(applicationService.createApplication(
+            anyString(), any(), any(), anyString()))
+            .thenReturn(new ApplicationDTOs.ApplicationDetailsResponse());
+
+    mockMvc.perform(multipart("/applications")
+            .file(application)
+            .header("Authorization", "Bearer test-token"))
+            .andExpect(status().isOk());
+}
+
+
+
+
+@Test
+void getApplicationDetails_ShouldReturnOk() throws Exception {
+
+    when(applicationService.getApplicationDetails(
+            eq(1L), anyString()))
+            .thenReturn(new ApplicationDTOs.ApplicationDetailsResponse());
+
+    mockMvc.perform(get("/applications/1")
+            .header("Authorization", "Bearer test-token"))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON));
+}
+
 
 ---
 
