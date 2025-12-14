@@ -402,7 +402,534 @@ User flow для БТИ
 
 ### Спецификация API
 
-Представить описание реализованных функциональных возможностей ПС с использованием Open API (можно представить либо полный файл спецификации, либо ссылку на него)
+openapi.yml
+openapi: 3.0.3
+info:
+  title: Онлайн-сервис для перевода, переустановки и перепланировки помещений
+  description: API документация для всех эндпоинтов сервиса
+  version: "1.0.0"
+servers:
+  - url: http://localhost:8080
+    description: Локальный сервер
+paths:
+  /auth:
+    post:
+      summary: Аутентификация и получение JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JwtRequest'
+      responses:
+        '200':
+          description: JWT токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JwtResponse'
+
+  /acts:
+    get:
+      summary: Получение всех актов (ROLE_BTI)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Список актов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActDTO'
+
+  /applications/appealed:
+    get:
+      summary: Получение апеллируемых заявлений (ROLE_BTI)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+          required: false
+          description: Поиск по строке
+      responses:
+        '200':
+          description: Список заявлений
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApplicationDTOs.ApplicationListItemResponse'
+
+  /applications:
+    get:
+      summary: Получение заявлений текущего пользователя (ROLE_CLIENT)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+          required: false
+      responses:
+        '200':
+          description: Список заявлений
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApplicationDTOs.ApplicationListItemResponse'
+    post:
+      summary: Создание нового заявления (ROLE_CLIENT)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                application:
+                  type: string
+                  description: JSON строки заявления
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Вложения
+                categories:
+                  type: array
+                  items:
+                    type: string
+                  description: Категории вложений
+      responses:
+        '200':
+          description: Детали созданного заявления
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationDTOs.ApplicationDetailsResponse'
+
+  /applications/{id}:
+    get:
+      summary: Получение деталей конкретного заявления
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Детали заявления
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationDTOs.ApplicationDetailsResponse'
+    delete:
+      summary: Удаление заявления (ROLE_CLIENT)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '204':
+          description: Успешное удаление
+
+  /applications/{id}/attachments:
+    post:
+      summary: Добавление вложения к заявлению (ROLE_CLIENT)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                category:
+                  type: string
+      responses:
+        '200':
+          description: Вложение успешно добавлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttachmentDetailsDTO'
+
+  /history:
+    get:
+      summary: История уведомлений (ROLE_CLIENT)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Список уведомлений
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HistoryItemDTO'
+  /history/{id}/read:
+    put:
+      summary: Пометить уведомление как прочитанное (ROLE_CLIENT)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+      responses:
+        '200':
+          description: Успешно отмечено
+
+  /profile/me:
+    get:
+      summary: Получение профиля текущего пользователя
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Профиль пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileDTO'
+    put:
+      summary: Обновление профиля (ROLE_CLIENT)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: string
+                  description: JSON данные профиля
+                photo:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Обновленный профиль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileDTO'
+
+  /properties:
+    get:
+      summary: Получение объектов недвижимости текущего пользователя (ROLE_CLIENT)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Список объектов недвижимости
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PropertyDetailsDTO'
+
+  /users/clients:
+    get:
+      summary: Получение всех клиентов (ROLE_ZHES)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+          required: false
+      responses:
+        '200':
+          description: Список клиентов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProfileDTO'
+
+  /files/profile/{fileName}:
+    get:
+      summary: Получение фото профиля
+      parameters:
+        - in: path
+          name: fileName
+          schema:
+            type: string
+          required: true
+      responses:
+        '200':
+          description: Файл профиля
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  /files/applications/{appId}/{fileName}:
+    get:
+      summary: Получение файлов заявления
+      parameters:
+        - in: path
+          name: appId
+          schema:
+            type: string
+          required: true
+        - in: path
+          name: fileName
+          schema:
+            type: string
+          required: true
+      responses:
+        '200':
+          description: Файл
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    JwtRequest:
+      type: object
+      properties:
+        passportIdentifier:
+          type: string
+        phoneNumber:
+          type: string
+      required:
+        - passportIdentifier
+        - phoneNumber
+
+    JwtResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+      required:
+        - token
+        - roles
+
+    ActDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+        inspectionDate1:
+          type: string
+          format: date
+        inspectionDate2:
+          type: string
+          format: date
+        application:
+          $ref: '#/components/schemas/ApplicationDTOs.ApplicationListItemResponse'
+
+    ActDTOs.ActCreateRequest:
+      type: object
+      properties:
+        inspectionDate1:
+          type: string
+          format: date
+        inspectionDate2:
+          type: string
+          format: date
+      required:
+        - inspectionDate1
+        - inspectionDate2
+
+    ApplicationDTOs.ApplicationListItemResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        operationType:
+          type: string
+        status:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        description:
+          type: string
+        rejectionReason:
+          type: string
+        applicant:
+          $ref: '#/components/schemas/ProfileDTO'
+        property:
+          $ref: '#/components/schemas/PropertyDetailsDTO'
+
+    ApplicationDTOs.ApplicationDetailsResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        operationType:
+          type: string
+        status:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        description:
+          type: string
+        rejectionReason:
+          type: string
+        inspectionDate1:
+          type: string
+          format: date
+        inspectionDate2:
+          type: string
+          format: date
+        applicant:
+          $ref: '#/components/schemas/ProfileDTO'
+        property:
+          $ref: '#/components/schemas/PropertyDetailsDTO'
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttachmentDetailsDTO'
+
+    AttachmentDetailsDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+        category:
+          type: string
+        originalFileName:
+          type: string
+        contentType:
+          type: string
+        fileSize:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        uploaderName:
+          type: string
+        url:
+          type: string
+
+    HistoryItemDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+        applicationId:
+          type: integer
+        status:
+          type: string
+        description:
+          type: string
+        actorName:
+          type: string
+        actorRole:
+          type: string
+        isRead:
+          type: boolean
+        eventTimestamp:
+          type: string
+          format: date-time
+
+    ProfileDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+        passportIdentifier:
+          type: string
+        phoneNumber:
+          type: string
+        fullName:
+          type: string
+        email:
+          type: string
+        photoUrl:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        birthDate:
+          type: string
+          format: date
+        passportIssueDate:
+          type: string
+          format: date
+
+    PropertyDetailsDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+        propertyType:
+          type: string
+        objectType:
+          type: string
+        region:
+          type: string
+        city:
+          type: string
+        streetType:
+          type: string
+        streetName:
+          type: string
+        houseNumber:
+          type: string
+        apartmentNumber:
+          type: string
+        roomNumber:
+          type: string
+        technicalPassportNumber:
+          type: string
+
 
 ### Безопасность
 
@@ -582,7 +1109,31 @@ public class PasswordConfig {
 
 ### Оценка качества кода
 
-Используя показатели качества и метрики кода, оценить его качество
+В рамках анализа были использованы следующие метрики:
+1 Количество строк кода (Lines of Code, LOC). Представляет собой общее количество строк в проекте, включая строки с кодом, комментарии и пустые строки. Данная метрика позволяет оценить общий объём и масштаб проекта.
+2 Покрытие тестами (Test Coverage). Характеризует процент кода, покрытого автоматическими тестами. Высокий уровень покрытия тестами снижает вероятность появления ошибок и упрощает сопровождение системы.
+3 Цикломатическая сложность (Cyclomatic Complexity). Определяет количество независимых логических путей в методах и функциях. Низкие значения данной метрики указывают на простоту логики и хорошую читаемость кода.
+4 Количество функций (Function Count). Общее число методов в проекте. Используется для оценки модульности и распределения логики между компонентами системы.
+5 Количество классов (Class Count). Отражает архитектурную сложность проекта и степень разделения ответственности между компонентами (контроллеры, сервисы, DTO, конфигурации).
+6 Коэффициент комментариев (Comment Ratio). Соотношение комментариев к строкам кода, позволяющее оценить степень документированности программного средства.
+Одной из ключевых метрик, использованных при анализе, является количество строк кода (LOC). Анализ проводился на уровне Java-файлов проекта, включая контроллеры, сервисы, DTO, конфигурационные классы и утилиты безопасности.
+В таблице 1-2 представлено значение метрики количества строк кода в проекте.
+
+Таблица 1 – Общая оценка проекта
+Оценка	Количество проблем	Строки кода	Проанализированные файлы
+Хорошо	0	~3040	57
+
+Полученное значение LOC указывает на то, что проект имеет средний объём и соответствует типичному размеру серверного приложения на Spring Boot.
+
+Таблица 2 – Метрики оценки качества кода
+Класс / Пакет	Метрика	Значение / Комментарий
+Все контроллеры	Cyclomatic Complexity	~2–5 на метод, низкая
+DTO	Maintainability	Высокая (простые POJO)
+Services	Coverage	Частично покрыты тестами (~40–60%)
+Security	Vulnerabilities	JWT + stateless, минимальные
+
+Контроллеры проекта содержат минимальную бизнес-логику и выполняют роль связующего слоя между клиентом и сервисами. DTO-классы представлены простыми структурами данных, что положительно влияет на сопровождаемость кода.
+
 
 ---
 
